@@ -1,0 +1,277 @@
+main的js代码：cc.Class({
+    extends: cc.Component,
+
+    properties: {
+        player: {
+            default: null,
+            type: cc.Node
+
+        },
+        dici: {
+            default: null,
+            type: cc.Prefab
+        },
+        timeLabel: {
+            default: null,
+            type: cc.Label
+        },
+        Label: {
+            default: null,
+            type: cc.Label
+        },
+        bgAudio: {
+            default: null,
+            url: cc.AudioClip //对资源的引用用url
+        },
+        jumpAudio: {
+            default: null,
+            url: cc.AudioClip
+        },
+        diedAudio: {
+            default: null,
+            url: cc.AudioClip
+        },
+        playerJumpHeight: 30,
+        wallWidth: 80,
+        diciCount: 0,
+        dici_duration: 140,
+        gameTime: 60,
+        scoreCount: 0,
+    },
+    //向右移动的方法
+    playerMoveRight: function () {
+        var goRight = cc.moveTo(0.2, cc.p(this.node.width / 2 - this.wallWidth, this.player.getPositionY()));
+        var goR1 = cc.moveTo(0.1, cc.p(this.node.width / 2 - this.wallWidth - 30, this.player.getPositionY()));
+        var goR2 = cc.moveTo(0.1, cc.p(this.node.width / 2 - this.wallWidth, this.player.getPosition().y));
+        var sque = cc.sequence(goR1, goR2);
+        if (this.player.rotationY == 180) {
+            this.player.runAction(sque);
+        } else {
+            this.player.runAction(goRight);
+        }
+        this.player.rotationY = 180; //向Y方向反转180.
+
+    },
+    //向左移动的方法
+    playerMoveLeft: function () {
+        var goLeft = cc.moveTo(0.2, cc.p(-this.node.width / 2 + this.wallWidth, this.player.getPositionY()));
+        var goL1 = cc.moveTo(0.1, cc.p(-this.node.width / 2 + this.wallWidth + 30, this.player.getPositionY()));
+        var goL2 = cc.moveTo(0.1, cc.p(-this.node.width / 2 + this.wallWidth, this.player.getPosition().y));
+        var sque = cc.sequence(goL1, goL2);
+        if (this.player.rotationY == 0) {
+            this.player.runAction(sque);
+        } else {
+            this.player.runAction(goLeft);
+        }
+        this.player.rotationY = 0; //向Y方向反转0.
+    },
+    //监听事件的发生。
+    setInputControl: function () {
+        var self = this;
+        var listener = {
+            event: cc.EventListener.TOUCH_ONE_BY_ONE,
+            onTouchBegan: function (touches, event) {
+                //获得玩家点击的是左还是右
+                var target = event.getCurrentTarget(); //获得点击事件绑定的target。
+                var locationInNode = target.convertToNodeSpace(touches.getLocation()); //获取坐标
+                //cc.log(locationInNode.x);
+                if (locationInNode.x > self.node.width / 2) {
+                    //点击屏幕的右边
+                    self.playerMoveRight();
+                } else {
+                    //点击的屏幕的左边。
+                    self.playerMoveLeft();
+                }
+                self.newDici();
+                cc.audioEngine.playEffect(self.jumpAudio, false) //Music音乐。Effect音效
+                self.scoreCount++;
+                self.Label.string = "得分：" + self.scoreCount;
+                cc.sys.localStorage.setItem('score', self.scoreCount); //将数据存在本地,将取到的scoreCounut存为score.在一个场景中set，在另外一个场景get.
+                return true;
+            },
+            onTouchMoved: function (touches, event) {
+
+            },
+            onTouchEnd: function (touches, event) {
+
+            },
+
+        }
+        cc.eventManager.addListener(listener, self.node);
+    },
+    newDici: function () {
+        this.diciCount++;
+        var newDici = cc.instantiate(this.dici); //引入外部配置的模型
+        this.node.addChild(newDici); //添加模型
+        var random = cc.random0To1();
+        if (random >= 0.5) {
+            newDici.rotationY = 0; //判断是否变换位置。
+        } else {
+            newDici.rotationY = 180;
+        }
+        newDici.setPosition(this.diciPosition(random));
+        // var begin = newDici.setPosition(this.diciPosition(random));
+        // var finish = cc.callFunc(newDici.removeFromParent,newDici);
+        // var myAction = cc.sequence(begin,finish);
+        // newDici.runAction(myAction); 
+        if (this.diciPosition(random).y > this.node.height) {
+            newDici.callFunc(newDici.removeFormparent, newDici);
+        }
+        // cc.log(this.diciCount);
+    },
+    diciPosition: function (rand) {
+        var randX = 0;
+        var randY = 0;
+        if (rand >= 0.5) {
+            randX = this.node.width / 2 - this.wallWidth;
+        } else {
+            randX = -this.node.width / 2 + this.wallWidth;
+        }
+        if (this.diciCount <= 8) {
+            //diciCount为获取第几个地刺。
+            randY = (this.node.height / 2) - (this.dici_duration * this.diciCount) - this.dici_duration * 1;
+        } else {
+            randY = (this.node.height / 2) - (this.dici_duration * 8) - this.dici_duration * 1;
+        }
+        return cc.p(randX, randY);
+    },
+    onLoad: function () {
+
+        //音效的大小
+        cc.audioEngine.setEffectsVolume(0.1);
+        //播放music
+        cc.audioEngine.playMusic(this.bgAudio, true); //第二个参数，是否循环。
+        this.diciCount = 0;
+        cc.director.preloadScene('OverScene');
+        this.setInputControl();
+        this.player.setPosition(-this.node.width / 2 + this.wallWidth, this.node.height / 2 - 175);
+        for (var i = 0; i < 8; i++) {
+            this.newDici();
+        }
+        this.schedule(function () {
+            this.gameTime--;
+            this.timeLabel.string = "倒计时：" + this.gameTime;
+            if (this.gameTime <= 0) {
+                cc.director.loadScene('OverScene');
+                cc.audioEngine.playEffect(this.diedAudio, false);
+            }
+        }, 1);
+    },
+
+    start() {
+
+    },
+
+    // update (dt) {},
+});
+dici代码：var tmpPlayer = require('player');
+cc.Class({
+    extends: cc.Component,
+
+    properties: {
+        diedAudio:{
+            default:null,
+            url:cc.AudioClip
+        }
+    },
+    //监听有无动作。
+    setInputControl: function () {
+        var self = this;
+        var listener = {
+            event: cc.EventListener.TOUCH_ONE_BY_ONE,
+            onTouchBegan: function (touches, event) {
+                var goLocation = cc.moveBy(0.2, cc.p(0, 140)); //moveby坐标1迁移，moveBy(time,cc.p(x,y)),x,y,相对于自己的位置加或减。
+                self.node.runAction(goLocation); //自带的函数，需要this.node.function(),自己写的函数：this.function();
+                return true;
+            },
+
+        }
+        cc.eventManager.addListener(listener, self.node); //添加到事件管理器中。
+    },
+
+
+    onLoad() {
+        this.setInputControl();
+    },
+
+    start() {
+
+    },
+    //碰撞监测。
+    nodeBox:function(){
+        return this.node.getBoundingBoxToWorld();
+    },
+    //实时监测。
+     update (dt) {
+         //监测碰撞
+         var Player = cc.find("Canvas/normal").getComponent(tmpPlayer);
+         //Player为引用到player脚本下的normal.
+         if(cc.rectIntersectsRect(Player.node.getBoundingBoxToWorld(),this.nodeBox())){
+            cc.audioEngine.playEffect(this.diedAudio, false);
+             cc.director.loadScene('OverScene');
+             cc.audioEngine.pauseMusic(this.bgAudio, false);
+         }
+     },
+});
+返回：cc.Class({
+    extends: cc.Component,
+
+    properties: {
+        button: {
+            default: null,
+            type: cc.Node
+        },
+        ScoreLabel: {
+            default: null,
+            type: cc.Label
+        }
+    },
+
+
+    onLoad: function () {
+        cc.director.preloadScene('gameScene');
+        this.button.on('touchstart', function () {
+            cc.director.loadScene('gameScene');
+        });
+        var score = cc.sys.localStorage.getItem('score');
+        this.ScoreLabel.string = '最终得分：' + score;//如果定义在properties中的全局变量，使用时要用this.xx如果在某个函数中定义的变量，可以直接用变量返回或计算。
+    },
+
+    start() {
+
+    },
+
+    // update (dt) {},
+});
+开始：cc.Class({
+    extends: cc.Component,
+
+    properties: {
+        button: {
+            default: null,
+            type: cc.Node
+        }
+    },
+
+    // LIFE-CYCLE CALLBACKS:
+
+    onLoad: function () {
+        cc.director.preloadScene('gameScene');
+        var scaleTo = cc.scaleTo(0.8,0.9); //放大缩小。To放大到多少，By放大到什么范围。
+        var reverse = cc.scaleTo(1,1);
+        var action = cc.sequence(scaleTo, reverse);
+        var repeat = cc.repeatForever(action); //一直执行。
+
+        this.button.runAction(repeat); //开始这个动作
+        this.button.on('touchstart', function () {
+            cc.director.loadScene('gameScene');
+        })
+    },
+
+    start() {
+
+    },
+
+    // update (dt) {},
+});
+玩家：需要建立一个玩家绑定人物的js脚本，
